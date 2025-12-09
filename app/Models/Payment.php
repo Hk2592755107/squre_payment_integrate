@@ -44,7 +44,7 @@ class Payment extends Model
      */
     public function isSuccessful()
     {
-        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_APPROVED,self::STATUS_FAILED, self::STATUS_CANCELED, self::STATUS_PENDING]);
+        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_APPROVED]);
     }
 
     /**

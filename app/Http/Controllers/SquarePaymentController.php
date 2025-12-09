@@ -29,15 +29,7 @@ class SquarePaymentController extends Controller
             $data = $request->json()->all();
 
             $sourceId = $data['sourceId'] ?? null;
-            $amount = $data['amount'] ?? null;
-            $customerEmail = $data['customer_email'] ?? null;
-            $orderId = $data['order_id'] ?? null;
-
-            \Log::info('Payment request received', [
-                'sourceId' => $sourceId,
-                'amount' => $amount,
-                'ip' => $request->ip()
-            ]);
+            $amount   = $data['amount'] ?? null;
 
             if (!$sourceId || !$amount) {
                 return response()->json([
@@ -46,40 +38,46 @@ class SquarePaymentController extends Controller
                 ], 422);
             }
 
-            // Call Square service
             $result = $this->square->processPayment($sourceId, $amount);
+            $payment = $result['payment'] ?? null;
+            $errors  = $result['errors'] ?? null;
+            $status = $payment ? $payment->getStatus() : Payment::STATUS_FAILED;
 
-            if ($result['success']) {
+            \Log::info('Square Raw Response', $result);
 
-                $payment = $result['payment'];
 
-                $record = Payment::create([
-                    'square_payment_id' => $payment->getId(),
-                    'amount' => $amount,
-                    'status' => $payment->getStatus(),
-                    'customer_email' => $customerEmail,
-                    'order_id' => $orderId,
-                    'location_id' => config('square.location_id'),
-                    'source_type' => $payment->getSourceType(),
-                    'request_data' => $data,
-                    'payment_data' => $payment,
-                    'idempotency_key' => $result['idempotency_key'],
-                ]);
+            \Log::info('Square Errors', [
+                'errors' => $errors,
+            ]);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Payment successful',
-                    'data' => ['payment_record' => $record]
-                ]);
-            }
+            $record = Payment::create([
+                'square_payment_id' => $payment ? $payment->getId() : null,
+                'amount'            => $amount,
+                'status'            => $status,
+                'customer_email'    => $data['customer_email'] ?? null,
+                'order_id'          => $payment ? $payment->getOrderId() : null,
+                'payment_data'      => $payment ?: null,
+                'request_data'      => $data,
+                'idempotency_key'   => $result['idempotency_key'] ?? null,
+                'location_id'       => $payment ? $payment->getLocationId() : null,
+                'source_type'       => $payment ? $payment->getSourceType() : null,
+                'error_message' => json_decode(json_encode($errors), true),
+            ]);
+
+            \Log::info('Payment DB Record Stored', [
+                'record' => $record->toArray(),
+            ]);
+
             return response()->json([
-                'success' => false,
-                'errors' => $result['errors']
-            ], 400);
+                'success' => $result['success'],
+                'data' => [
+                    'payment_record' => $record,
+                ]
+            ]);
 
         } catch (\Exception $e) {
 
-            \Log::error('Square payment error: ' . $e->getMessage());
+            \Log::error('Square payment fatal error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,

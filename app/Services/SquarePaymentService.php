@@ -3,11 +3,11 @@
 namespace App\Services;
 
 use Square\Environments;
+use Square\Legacy\Exceptions\ApiException;
 use Square\SquareClient;
 use Square\Payments\Requests\CreatePaymentRequest;
 use Square\Types\Money;
 use Square\Types\Currency;
-use Square\Exceptions\ApiException;
 use Illuminate\Support\Facades\Log;
 
 class SquarePaymentService
@@ -47,22 +47,25 @@ class SquarePaymentService
                 'success' => true,
                 'payment' => $payment,
                 'idempotency_key' => $idempotencyKey,
+                'errors' => null,
             ];
 
         } catch (ApiException $e) {
-            Log::error('Square API error: ', $e->getErrors());
 
             return [
                 'success' => false,
-                'errors' => $e->getErrors(),
+                'payment' => null,
+                'idempotency_key' => null,
+                'errors' => $e->getErrors(), // Square ki API errors
             ];
+
         } catch (\Exception $e) {
-            Log::error('Square payment error: ' . $e->getMessage());
 
             return [
                 'success' => false,
+                'payment' => null,
+                'idempotency_key' => $idempotencyKey,
                 'errors' => [$e->getMessage()],
             ];
         }
-    }
-}
+    }}

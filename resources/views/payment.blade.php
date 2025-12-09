@@ -78,7 +78,7 @@
         }
     }
 
-    // ✅ Show Messages
+    // ✅ Show Toast Messages
     function showMessage(msg, type) {
         const box = document.getElementById("message");
 
@@ -98,7 +98,7 @@
             return result.token;
         }
 
-        throw new Error("Card tokenization failed");
+        throw new Error(result.errors?.[0]?.message || "Tokenization failed");
     }
 
     // ✅ Handle payment button click
@@ -123,17 +123,26 @@
         btn.disabled = true;
         text.textContent = "Processing...";
 
+        let token = null;
+        let clientError = null;
+
         try {
+            token = await tokenize();    // ✅ Try tokenization
 
-            const token = await tokenize();
+        } catch (e) {
+            clientError = e.message;     // ✅ Capture frontend error
+        }
 
-            const payload = {
-                sourceId: token,
-                amount: parseFloat(amount),
-                customer_email: email,
-                order_id: "ORD-" + Date.now()
-            };
+        // ✅ Always send POST request to backend (even if token fails)
+        const payload = {
+            sourceId: token,               // null if fail
+            amount: parseFloat(amount),
+            customer_email: email,
+            order_id: "ORD-" + Date.now(),
+            client_error: clientError      // ✅ frontend error stored in DB
+        };
 
+        try {
             const response = await fetch("/process-payment", {
                 method: "POST",
                 headers: {
@@ -148,7 +157,6 @@
             if (data.success) {
                 showMessage("Payment Successful ✅", "success");
 
-                // ✅ Redirect after success
                 setTimeout(() => {
                     window.location.href = "/pay";
                 }, 1500);
@@ -158,13 +166,12 @@
             }
 
         } catch (e) {
-            showMessage("Error: " + e.message, "error");
+            showMessage("Network Error: " + e.message, "error");
 
         } finally {
             btn.disabled = false;
             text.textContent = "Pay Now";
         }
-
     };
 
     document.addEventListener("DOMContentLoaded", initSquare);
